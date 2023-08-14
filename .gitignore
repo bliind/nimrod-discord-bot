@@ -1,0 +1,5 @@
+**/__pycache__
+nimrod.db
+config.json
+config.test.json
+
