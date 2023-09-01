@@ -130,7 +130,7 @@ async def warnings(interaction: discord.Interaction, user: discord.Member):
     warnings = nimroddb.list_warns(user.id)
     flag = nimroddb.get_flag(user.id)
     count = len(warnings)
-    description = f' '
+    description = f'{user.mention}\n\n'
     for w in warnings:
         w = dotdict(w)
         description += f'''
@@ -149,7 +149,7 @@ async def delwarn(interaction: discord.Interaction, warn_id: str):
     if nimroddb.del_warn(warn_id):
         await interaction.response.send_message(embed=discord.Embed(timestamp=datetime.datetime.now(), description=f'{warn_id} deleted'))
     else:
-        await interaction.response.send_message("I had a database error, I'm so sorry, please try again")
+        await interaction.response.send_message("Something went wrong")
 
 @tree.command(name='flag', description='Flag a user as suspicious', guild=discord.Object(id=config.server))
 async def flag(interaction: discord.Interaction, user: discord.Member):
@@ -293,19 +293,27 @@ async def on_raw_member_remove(event):
 @bot.event
 async def on_member_join(member):
     created = round(int(member.created_at.timestamp()))
-    embed = discord.Embed(
-        color=discord.Color.green(),
-        timestamp=datetime.datetime.now(),
-        description=f'''
-            <@{member.id}> joined.
+    # embed = discord.Embed(
+    #     color=discord.Color.green(),
+    #     timestamp=datetime.datetime.now(),
+    #     description=f'''
+    #         <@{member.id}> joined.
 
-            Account created <t:{created}:f>
-            (Roughly <t:{created}:R>)
-        '''.replace(' '*12, '').strip()
-    )
-    embed.set_author(name=get_member_name(member), icon_url=get_member_image(member))
-    embed.set_thumbnail(url=member.avatar.url)
+    #         Account created <t:{created}:f>
+    #         (Roughly <t:{created}:R>)
+    #     '''.replace(' '*12, '').strip()
+    # )
+    # embed.set_author(name=get_member_name(member), icon_url=get_member_image(member))
+    # embed.set_thumbnail(url=member.avatar.url)
 
+    description = f'''
+        <@{member.id}> joined.
+
+        Account created <t:{created}:f>
+        (Roughly <t:{created}:R>)
+    '''.replace(' '*8, '').strip()
+
+    embed = make_embed('green', member, description)
     channel = bot.get_channel(config.user_logs_channel)
     await channel.send(embed=embed)
 
@@ -336,6 +344,7 @@ async def on_message_edit(before, after):
 
     embed = make_embed('yellow', after.author, 'Message edited')
     embed.description += f'''
+        [Jump to Message]({after.jump_url})
         in <#{after.channel.id}> by <@{after.author.id}>:
 
         _before:_
@@ -389,19 +398,16 @@ async def on_member_update(before, after):
 
 @bot.event
 async def on_user_update(before, after):
-    title = f'<@{after.id}> has been updated.\n'
-    embed = make_embed('blue', after, title)
+    pass
+    # title = f'<@{after.id}> has been updated.\n'
+    # embed = make_embed('blue', after, title)
 
-    if before.avatar != after.avatar:
-        embed.description += '\n🖼 Updated Global Avatar'
-        embed.set_thumbnail(url=after.avatar.url)
+    # if before.name != after.name:
+    #     embed.description += f'\n✏ Changed Username from **{before.name}** to **{after.name}**'
 
-    if before.name != after.name:
-        embed.description += f'\n✏ Changed Username from **{before.name}** to **{after.name}**'
-
-    if embed.description != title:
-        log_chan = bot.get_channel(config.user_logs_channel)
-        await log_chan.send(embed=embed)
+    # if embed.description != title:
+    #     log_chan = bot.get_channel(config.user_logs_channel)
+    #     await log_chan.send(embed=embed)
 
 @bot.event
 async def on_guild_channel_create(channel):
@@ -471,6 +477,10 @@ async def on_guild_role_update(before, after):
         embed.description += '\n- Role icon changed'
     if after.icon and after.icon.url:
         embed.set_thumbnail(url=after.icon.url)
+    if before.color != after.color:
+        bc = '#%02x%02x%02x' % before.color.to_rgb()
+        ac = '#%02x%02x%02x' % after.color.to_rgb()
+        embed.description += f'\n- Color changed from `{bc}` to `{ac}`'
 
     bp = {}
     changes = {}

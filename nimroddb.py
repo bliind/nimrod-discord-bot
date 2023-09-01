@@ -22,9 +22,12 @@ def del_warn(warn_id: str):
         conn = open_db()
         cur = conn.cursor()
         cur.execute('DELETE FROM warnings WHERE id = ?', (warn_id,))
+        count = cur.rowcount
         conn.commit()
         conn.close()
-        return True
+        if count > 0:
+            return True
+        return False
     except Exception as e:
         print('Failed to delete warn:')
         print(e)

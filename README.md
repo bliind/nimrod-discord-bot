@@ -20,5 +20,5 @@ CREATE TABLE flags(
     user_id INT,
     moderator_id INT,
     datestamp INT
-)
+);
 ```
