@@ -452,13 +452,13 @@ async def on_guild_channel_update(before, after):
 
 @bot.event
 async def on_guild_role_create(role):
-    chan = bot.get_channel(config.server_logs_channel)
+    chan = bot.get_channel(config.role_updates_channel)
     embed = make_embed('green', role.guild, f'Role created: {role.mention}')
     await chan.send(embed=embed)
 
 @bot.event
 async def on_guild_role_delete(role):
-    chan = bot.get_channel(config.server_logs_channel)
+    chan = bot.get_channel(config.role_updates_channel)
     embed = make_embed('red', role.guild, f'Role deleted: {role.name} ({role.id})')
     await chan.send(embed=embed)
 
@@ -487,7 +487,7 @@ async def on_guild_role_update(before, after):
             p = perm.replace('_', ' ').capitalize()
             embed.description += f'\n{emojis[access]} {p}'
 
-    chan = bot.get_channel(config.server_logs_channel)
+    chan = bot.get_channel(config.role_updates_channel)
     await chan.send(embed=embed)
 
 @bot.event
