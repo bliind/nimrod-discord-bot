@@ -421,14 +421,11 @@ async def on_guild_channel_update(before, after):
     befores = {}
     for role in after.changed_roles:
         for ao in after.overwrites_for(role):
-            if ao[1] != None:
-                if role.name not in overwrites: overwrites[role.name] = {}
-                overwrites[role.name][ao[0]] = ao[1]
+            if role.name not in overwrites: overwrites[role.name] = {}
+            overwrites[role.name][ao[0]] = ao[1]
         for bo in before.overwrites_for(role):
-            if bo[1] != None:
-                if role.name not in befores: befores[role.name] = {}
-                befores[role.name][bo[0]] = bo[1]
-    # roles['dev role']['manage_channels'] = True
+            if role.name not in befores: befores[role.name] = {}
+            befores[role.name][bo[0]] = bo[1]
 
     final = {}
     description = f'Permissions updated for <#{after.id}>:'
@@ -445,9 +442,9 @@ async def on_guild_channel_update(before, after):
         if len(ps) > 0:
             embed.description += f'\n\n:arrow_right: **{r}**'
         for p, a in ps.items():
-            emoji = ':white_check_mark:' if a else ':no_entry:'
+            emojis = {True: ':white_check_mark:', False: ':no_entry:', None: ':white_large_square:'}
             pr = p.replace('_', ' ').capitalize()
-            embed.description += f'\n{emoji} {pr}'
+            embed.description += f'\n{emojis[a]} {pr}'
 
     if embed.description.strip() != description:
         chan = bot.get_channel(config.server_logs_channel)
@@ -467,7 +464,31 @@ async def on_guild_role_delete(role):
 
 @bot.event
 async def on_guild_role_update(before, after):
-    pass
+    embed = make_embed('blurple', after.guild, f'**Role updated: {after.mention}**\n')
+    if before.name != after.name:
+        embed.description += f'\n- Name changed from `{before.name}` to `{after.name}`'
+    if before.icon != after.icon:
+        embed.description += '\n- Role icon changed'
+    if after.icon and after.icon.url:
+        embed.set_thumbnail(url=after.icon.url)
+
+    bp = {}
+    changes = {}
+    for b in before.permissions:
+        bp[b[0]] = b[1]
+    for a in after.permissions:
+        if bp[a[0]] != a[1]:
+            changes[a[0]] = a[1]
+
+    emojis = {True: ':white_check_mark:', False: ':no_entry:', None: ':white_large_square:'}
+    if len(changes) > 0:
+        embed.description += '\n- Permissions updated:'
+        for perm, access in changes.items():
+            p = perm.replace('_', ' ').capitalize()
+            embed.description += f'\n{emojis[access]} {p}'
+
+    chan = bot.get_channel(config.server_logs_channel)
+    await chan.send(embed=embed)
 
 @bot.event
 async def on_voice_state_update(member, before, after):
