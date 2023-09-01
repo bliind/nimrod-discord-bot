@@ -470,7 +470,8 @@ async def on_guild_role_delete(role):
 
 @bot.event
 async def on_guild_role_update(before, after):
-    embed = make_embed('blurple', after.guild, f'**Role updated: {after.mention}**\n')
+    desc = f'**Role updated: {after.mention}**\n'
+    embed = make_embed('blurple', after.guild, desc)
     if before.name != after.name:
         embed.description += f'\n- Name changed from `{before.name}` to `{after.name}`'
     if before.icon != after.icon:
@@ -497,8 +498,9 @@ async def on_guild_role_update(before, after):
             p = perm.replace('_', ' ').capitalize()
             embed.description += f'\n{emojis[access]} {p}'
 
-    chan = bot.get_channel(config.role_updates_channel)
-    await chan.send(embed=embed)
+    if embed.description != desc:
+        chan = bot.get_channel(config.role_updates_channel)
+        await chan.send(embed=embed)
 
 @bot.event
 async def on_voice_state_update(member, before, after):
