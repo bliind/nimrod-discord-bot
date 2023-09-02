@@ -46,8 +46,12 @@ def get_member_image(member):
     try:
         if member.guild_avatar:
             return member.guild_avatar.url
+    except: pass
+    try:
         if member.display_avatar:
             return member.display_avatar.url
+    except: pass
+    try:
         return member.avatar.url
     except:
         return None
@@ -56,10 +60,11 @@ def get_member_name(member):
     try:
         if member.nick:
             return member.nick
+    except: pass
+    try:
         if member.display_name:
             return member.display_name
-    except:
-        pass
+    except: pass
 
     return member.name
 
@@ -74,7 +79,7 @@ def make_embed(color, member, description=''):
     if not member:
         return None
 
-    if isinstance(member, discord.Member):
+    if isinstance(member, discord.Member) or isinstance(member, discord.User):
         embed.set_author(name=get_member_name(member), icon_url=get_member_image(member))
         embed.set_thumbnail(url=get_member_image(member))
     elif isinstance(member, discord.Guild):
@@ -402,6 +407,18 @@ async def on_member_update(before, after):
         role_embed.set_author(name=get_member_name(after), icon_url=get_member_image(after))
         role_embed.set_thumbnail(url=get_member_image(after))
         await log_chan.send(embed=role_embed)
+
+@bot.event
+async def on_member_ban(guild, user):
+    embed = make_embed('red', user, f'{user.mention} has been banned.')
+    chan = bot.get_channel(config.mod_logs_channel)
+    await chan.send(embed=embed)
+
+@bot.event
+async def on_member_unban(guild, user):
+    embed = make_embed('green', user, f'{user.mention} has been unbanned.')
+    chan = bot.get_channel(config.mod_logs_channel)
+    await chan.send(embed=embed)
 
 @bot.event
 async def on_user_update(before, after):
