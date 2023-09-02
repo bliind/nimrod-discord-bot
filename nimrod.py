@@ -1,4 +1,5 @@
 import discord
+import asyncio
 import json
 import os
 import re
@@ -6,7 +7,6 @@ import datetime
 import nimroddb
 from discord import app_commands
 from discord.ext import tasks
-from time import sleep
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
@@ -43,17 +43,24 @@ bot = MyClient()
 tree = app_commands.CommandTree(bot)
 
 def get_member_image(member):
-    if member.guild_avatar:
-        return member.guild_avatar.url
-    if member.display_avatar:
-        return member.display_avatar.url
-    return member.avatar.url
+    try:
+        if member.guild_avatar:
+            return member.guild_avatar.url
+        if member.display_avatar:
+            return member.display_avatar.url
+        return member.avatar.url
+    except:
+        return None
 
 def get_member_name(member):
-    if member.nick:
-        return member.nick
-    if member.display_name:
-        return member.display_name
+    try:
+        if member.nick:
+            return member.nick
+        if member.display_name:
+            return member.display_name
+    except:
+        pass
+
     return member.name
 
 def make_embed(color, member, description=''):
@@ -229,7 +236,7 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
         await interaction.channel.send('Error logging mute to warns')
 
 @tree.command(name='ban', description='Ban a user', guild=discord.Object(id=config.server))
-async def ban(interaction: discord.Interaction, user: discord.Member, reason: str, delete_message_days: int=0):
+async def ban(interaction: discord.Interaction, user: discord.User, reason: str, delete_message_days: int=0):
     server = [g for g in bot.guilds if g.id == config.server][0]
 
     userDM = discord.Embed(
@@ -248,8 +255,8 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
     except:
         pass
 
-    sleep(0.5)
-    await user.ban(delete_message_days=delete_message_days)
+    await asyncio.sleep(0.5)
+    await interaction.guild.ban(user, reason=reason, delete_message_seconds=delete_message_days*86400)
 
     response = discord.Embed(
         color=discord.Color.red(),
