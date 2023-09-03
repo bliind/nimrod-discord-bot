@@ -142,7 +142,7 @@ async def warnings(interaction: discord.Interaction, user: discord.User):
     warnings = nimroddb.list_warns(user.id)
     flag = nimroddb.get_flag(user.id)
     count = len(warnings)
-    description = f'{user.mention}\n\n'
+    description = f'Warnings for {user.mention} ({count}):\n'
     for w in warnings:
         w = dotdict(w)
         description += f'''
@@ -152,8 +152,8 @@ async def warnings(interaction: discord.Interaction, user: discord.User):
     if flag:
         flag = dotdict(flag)
         description += f'\n\n_Flagged by <@{flag.moderator_id}> on <t:{flag.datestamp}:f>_'
-    warnings_embed = discord.Embed(color=discord.Color.yellow(), timestamp=datetime.datetime.now(), description=description)
-    warnings_embed.set_author(name=f'Warnings for {user.name}{" | " + user.nick if user.nick else ""} ({count})', icon_url=get_member_image(user))
+
+    warnings_embed = make_embed('yellow', user, description)
     await interaction.response.send_message(embed=warnings_embed)
 
 @tree.command(name='delwarn', description='Delete a warning for a user', guild=discord.Object(id=config.server))
