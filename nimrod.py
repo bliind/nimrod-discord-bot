@@ -351,7 +351,7 @@ async def on_message_delete(message):
 
 @bot.event
 async def on_message_edit(before, after):
-    if before.author.id == bot.user.id:
+    if before.content != after.content:
         return
 
     embed = make_embed('yellow', after.author, 'Message edited')
