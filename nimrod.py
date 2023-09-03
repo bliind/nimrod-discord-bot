@@ -91,7 +91,7 @@ def make_embed(color, member, description=''):
 ### Commands
 ######
 @tree.command(name='warn', description='Warn a user', guild=discord.Object(id=config.server))
-async def warn(interaction: discord.Interaction, user: discord.Member, reason: str):
+async def warn(interaction: discord.Interaction, user: discord.User, reason: str):
     now = datetime.datetime.now()
     if nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason):
         server = interaction.guild
@@ -138,7 +138,7 @@ async def warn(interaction: discord.Interaction, user: discord.Member, reason: s
         await interaction.response.send_message("I had a database error, I'm so sorry, please try again")
 
 @tree.command(name='warnings', description='Look up the warnings for a user', guild=discord.Object(id=config.server))
-async def warnings(interaction: discord.Interaction, user: discord.Member):
+async def warnings(interaction: discord.Interaction, user: discord.User):
     warnings = nimroddb.list_warns(user.id)
     flag = nimroddb.get_flag(user.id)
     count = len(warnings)
@@ -164,16 +164,11 @@ async def delwarn(interaction: discord.Interaction, warn_id: str):
         await interaction.response.send_message("Something went wrong")
 
 @tree.command(name='flag', description='Flag a user as suspicious', guild=discord.Object(id=config.server))
-async def flag(interaction: discord.Interaction, user: discord.Member):
+async def flag(interaction: discord.Interaction, user: discord.User):
     now = datetime.datetime.now()
     if nimroddb.add_flag(config.server, user.id, interaction.user.id, int(round(now.timestamp()))):
-        em = discord.Embed(
-            color=discord.Color.yellow(),
-            timestamp=datetime.datetime.now(),
-            description=f'<@{user.id}> flagged'
-        )
-        em.set_author(name=get_member_name(user), icon_url=get_member_image(user))
-        await interaction.response.send_message(embed=em)
+        embed = make_embed('yellow', user, f'{user.mention} flagged')
+        await interaction.response.send_message(embed=embed)
     else:
         await interaction.response.send_message("I had a database error, I'm so sorry, please try again")
 
@@ -263,11 +258,7 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
     await asyncio.sleep(0.5)
     await interaction.guild.ban(user, reason=reason, delete_message_seconds=delete_message_days*86400)
 
-    response = discord.Embed(
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.now(),
-        description=f'Banned <@{user.id}> for `{reason}`'
-    )
+    response = make_embed('red', user, f'Banned <@{user.id}> for `{reason}`')
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
     await interaction.response.send_message(embed=response)
@@ -351,7 +342,7 @@ async def on_message_delete(message):
 
 @bot.event
 async def on_message_edit(before, after):
-    if before.content != after.content:
+    if before.content.strip() == after.content.strip():
         return
 
     embed = make_embed('yellow', after.author, 'Message edited')
