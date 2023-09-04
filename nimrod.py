@@ -322,6 +322,9 @@ async def on_member_join(member):
 
 @bot.event
 async def on_message_delete(message):
+    if message.channel.id in config.no_log_channels:
+        return
+
     created = round(int(message.created_at.timestamp()))
     embed = make_embed('red', message.author, 'Message deleted')
     embed.description += f'''
@@ -342,6 +345,9 @@ async def on_message_delete(message):
 
 @bot.event
 async def on_message_edit(before, after):
+    if after.channel.id in config.no_log_channels:
+        return
+
     if before.content.strip() == after.content.strip():
         return
 
