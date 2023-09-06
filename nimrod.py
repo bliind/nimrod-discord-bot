@@ -375,7 +375,12 @@ async def on_member_update(before, after):
         change_embed.description += f'\n🕵️‍♂️ changed nickname from **{before.nick}** to **{after.nick}**'
     
     if before.timed_out_until != after.timed_out_until:
-        change_embed.description += f'\n⏰ timed out until **<t:{round(int(after.timed_out_until.timestamp()))}:f>**'
+        if before.timed_out_until == None:
+            try: timed_out_until = round(int(after.timed_out_until.timestamp()))
+            except: timed_out_until = None
+            change_embed.description += f'\n⏰ timed out until **<t:{timed_out_until}:f>**'
+        if after.timed_out_until == None:
+            change_embed.description += f'\n⏰ **timeout removed**'
 
     if before.guild_avatar != after.guild_avatar:
         change_embed.description += f'\n🖼 updated server avatar\n'
