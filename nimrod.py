@@ -92,6 +92,7 @@ def make_embed(color, member, description=''):
 ######
 @tree.command(name='warn', description='Warn a user', guild=discord.Object(id=config.server))
 async def warn(interaction: discord.Interaction, user: discord.User, reason: str):
+    await interaction.response.defer()
     now = datetime.datetime.now()
     if nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason):
         server = interaction.guild
@@ -120,7 +121,7 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
             warnEmbed.description += '\n\n_Could not DM user_'
 
         warnEmbed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
-        await interaction.response.send_message(embed=warnEmbed)
+        await interaction.followup.send(embed=warnEmbed)
 
         # log
         log_embed = discord.Embed(
@@ -135,10 +136,11 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
         log_channel = bot.get_channel(config.mod_logs_channel)
         await log_channel.send(embed=log_embed)
     else:
-        await interaction.response.send_message("I had a database error, I'm so sorry, please try again")
+        await interaction.followup.send("I had a database error, I'm so sorry, please try again")
 
 @tree.command(name='warnings', description='Look up the warnings for a user', guild=discord.Object(id=config.server))
 async def warnings(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer()
     warnings = nimroddb.list_warns(user.id)
     flag = nimroddb.get_flag(user.id)
     count = len(warnings)
@@ -154,29 +156,32 @@ async def warnings(interaction: discord.Interaction, user: discord.User):
         description += f'\n\n_Flagged by <@{flag.moderator_id}> on <t:{flag.datestamp}:f>_'
 
     warnings_embed = make_embed('yellow', user, description)
-    await interaction.response.send_message(embed=warnings_embed)
+    await interaction.followup.send(embed=warnings_embed)
 
 @tree.command(name='delwarn', description='Delete a warning for a user', guild=discord.Object(id=config.server))
 async def delwarn(interaction: discord.Interaction, warn_id: str):
+    await interaction.response.defer()
     if nimroddb.del_warn(warn_id):
-        await interaction.response.send_message(embed=discord.Embed(timestamp=datetime.datetime.now(), description=f'{warn_id} deleted'))
+        await interaction.followup.send(embed=discord.Embed(timestamp=datetime.datetime.now(), description=f'{warn_id} deleted'))
     else:
-        await interaction.response.send_message("Something went wrong")
+        await interaction.followup.send("Something went wrong")
 
 @tree.command(name='flag', description='Flag a user as suspicious', guild=discord.Object(id=config.server))
 async def flag(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer()
     now = datetime.datetime.now()
     if nimroddb.add_flag(config.server, user.id, interaction.user.id, int(round(now.timestamp()))):
         embed = make_embed('yellow', user, f'{user.mention} flagged')
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
     else:
-        await interaction.response.send_message("I had a database error, I'm so sorry, please try again")
+        await interaction.followup.send("I had a database error, I'm so sorry, please try again")
 
 @tree.command(name='mute', description='Timeout a user', guild=discord.Object(id=config.server))
 async def mute(interaction: discord.Interaction, user: discord.Member, time: str, reason: str):
+    await interaction.response.defer()
     match = re.match('(?P<time>\d+)(?P<desig>\w)', time)
     if not match:
-        await interaction.response.send_message(f'Unknown time: {time}')
+        await interaction.followup.send(f'Unknown time: {time}')
         return
 
     t = match.group('time')
@@ -184,7 +189,7 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
     try:
         d = desigs[match.group('desig')]
     except:
-        await interaction.response.send_message('Only hours or days')
+        await interaction.followup.send('Only hours or days')
         return
 
     delta = datetime.timedelta(**{d: int(t)})
@@ -192,11 +197,21 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
 
     server = [g for g in bot.guilds if g.id == config.server][0]
 
+    hours = round(delta.total_seconds() / 3600)
+    days = int(hours/24)
+    remain_hours = int(hours - (days*24))
+
+    user_time = ''
+    if days > 0:
+        user_time = f'{days} days '
+    if remain_hours > 0:
+        user_time += f'{hours} hours'
+
     userDM = discord.Embed(
         color=discord.Color.red(),
         timestamp=datetime.datetime.now(),
         description=f'''
-            ### You have been muted on {server.name} for {round(delta.total_seconds() / 3600)} hours:
+            ### You have been muted on {server.name} for {user_time}:
             ### {reason}
         '''.replace(' '*12, '').strip()
     )
@@ -214,7 +229,7 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
     )
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
-    await interaction.response.send_message(embed=response)
+    await interaction.followup.send(embed=response)
 
     # log
     log_embed = discord.Embed(
@@ -237,6 +252,8 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
 
 @tree.command(name='ban', description='Ban a user', guild=discord.Object(id=config.server))
 async def ban(interaction: discord.Interaction, user: discord.User, reason: str, delete_message_days: int=0):
+    await interaction.response.defer()
+
     server = [g for g in bot.guilds if g.id == config.server][0]
 
     userDM = discord.Embed(
@@ -261,7 +278,7 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
     response = make_embed('red', user, f'Banned <@{user.id}> for `{reason}`')
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
-    await interaction.response.send_message(embed=response)
+    await interaction.followup.send(embed=response)
 
     # log
     log_embed = discord.Embed(
