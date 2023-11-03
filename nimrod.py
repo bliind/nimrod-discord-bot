@@ -251,6 +251,19 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
     log_channel = bot.get_channel(config.mod_logs_channel)
     await log_channel.send(embed=log_embed)
 
+    now = datetime.datetime.now()
+    try:
+        nimroddb.add_warn(config.server, user.id, interaction.user.id, int(round(now.timestamp())), f'(BAN) {reason}')
+    except:
+        await interaction.channel.send('Error logging ban to warns')
+
+@tree.command(name='appeal', description='Log a Ban Appeal', guild=discord.Object(id=config.server))
+async def appeal_command(interaction: discord.Interaction, user: str, decision: str, notes: str=''):
+    embed = make_embed('blue', interaction.user, f'### Ban appeal for __{user}__')
+    embed.add_field(name='Decision', value=decision, inline=False)
+    embed.add_field(name='Notes', value=notes, inline=False)
+    await interaction.response.send_message(embed=embed)
+
 ######
 ### Events
 ######
