@@ -115,7 +115,7 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
         warnEmbed = discord.Embed(
             color=discord.Color.yellow(),
             timestamp=datetime.datetime.now(),
-            description=f'<@{user.id}> warned with reason: `{reason}`'
+            description=f'<@{user.id}> warned with reason:\n{reason}'
         )
         if not dm_sent:
             warnEmbed.description += '\n\n_Could not DM user_'
@@ -129,7 +129,8 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
             timestamp=datetime.datetime.now(),
             description=f'''
                 <@{user.id}> has been warned by <@{interaction.user.id}>
-                ```{reason}```
+                ---
+                {reason}
             '''.replace(' '*12, '').strip()
         )
         log_embed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
@@ -177,8 +178,15 @@ async def flag(interaction: discord.Interaction, user: discord.User):
         await interaction.followup.send("I had a database error, I'm so sorry, please try again")
 
 @tree.command(name='mute', description='Timeout a user', guild=discord.Object(id=config.server))
-async def mute(interaction: discord.Interaction, user: discord.Member, time: str, reason: str):
+async def mute(interaction: discord.Interaction, user: discord.User, time: str, reason: str):
     await interaction.response.defer()
+
+    server = [g for g in bot.guilds if g.id == config.server][0]
+    member = server.get_member(user.id)
+    if not member:
+        await interaction.followup.send(f'User no longer on the server?')
+        return
+
     match = re.match('(?P<time>\d+)(?P<desig>\w)', time)
     if not match:
         await interaction.followup.send(f'Unknown time: {time}')
@@ -193,9 +201,7 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
         return
 
     delta = datetime.timedelta(**{d: int(t)})
-    await user.timeout(delta)
-
-    server = [g for g in bot.guilds if g.id == config.server][0]
+    await member.timeout(delta)
 
     hours = round(delta.total_seconds() / 3600)
     days = int(hours/24)
@@ -225,7 +231,7 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
     response = discord.Embed(
         color=discord.Color.red(),
         timestamp=datetime.datetime.now(),
-        description=f'Timed out <@{user.id}> for `{time}` for `{reason}`'
+        description=f'Timed out <@{user.id}> for {time} for:\n{reason}'
     )
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
@@ -237,7 +243,8 @@ async def mute(interaction: discord.Interaction, user: discord.Member, time: str
         timestamp=datetime.datetime.now(),
         description=f'''
             <@{user.id}> has been timed out for {time} by <@{interaction.user.id}>
-            ```{reason}```
+            ---
+            {reason}
         '''.replace(' '*12, '').strip()
     )
     log_embed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
@@ -286,7 +293,8 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
         timestamp=datetime.datetime.now(),
         description=f'''
             <@{user.id}> has been banned by <@{interaction.user.id}>
-            ```{reason}```
+            ---
+            {reason}
         '''.replace(' '*12, '').strip()
     )
     log_embed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
@@ -346,13 +354,14 @@ async def on_message_delete(message):
     embed = make_embed('red', message.author, 'Message deleted')
     embed.description += f'''
         in <#{message.channel.id}> by <@{message.author.id}>:
-        {'```'+message.content+'```' if message.content else ''}
+
+        {message.content if message.content else ''}
 
         _originally posted <t:{created}:f>_'''.replace(' '*8, '')
 
     files = []
     for file in message.attachments:
-        files.append(await file.to_file())
+        files.append(await file.to_file(spoiler=file.is_spoiler()))
 
     if files:
         embed.description += '\n_(Above images were attached)_'
@@ -374,9 +383,9 @@ async def on_message_edit(before, after):
         in <#{after.channel.id}> by <@{after.author.id}>:
 
         _before:_
-        ```{before.content}```
+        {before.content}
         _after:_
-        ```{after.content}```'''.replace(' '*8, '')
+        {after.content}'''.replace(' '*8, '')
 
     embed.set_author(name=get_member_name(after.author), icon_url=get_member_image(after.author))
 
