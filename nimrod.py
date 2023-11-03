@@ -68,12 +68,13 @@ def get_member_name(member):
 
     return member.name
 
-def make_embed(color, member, description=''):
+def make_embed(color, member, description='', **kwargs):
     color = getattr(discord.Color, color)
     embed = discord.Embed(
         color=color(),
         timestamp=datetime.datetime.now(),
-        description=description
+        description=description,
+        **kwargs
     )
 
     if not member:
@@ -280,10 +281,9 @@ async def on_message_delete(message):
         return
 
     created = round(int(message.created_at.timestamp()))
-    embed = make_embed('red', message.author, '### Message deleted')
-    embed.description += f'\nin <#{message.channel.id}> by <@{message.author.id}>'
-    embed.add_field(name='deleted message', value=message.content, inline=False)
-    embed.add_field(name=f'originally posted', value=f'<t:{created}:f>', inline=False)
+    embed = make_embed('red', message.author, f'in <#{message.channel.id}> by <@{message.author.id}>', title='Message deleted')
+    embed.description += f'\n\n**deleted message**\n{message.content}'
+    embed.description += f'\n\n**originally posted**\n<t:{created}:f>'
 
     files = []
     for file in message.attachments:
@@ -303,16 +303,15 @@ async def on_message_edit(before, after):
     if before.content.strip() == after.content.strip():
         return
 
-    embed = make_embed('yellow', after.author, 'Message edited')
-    embed.description += f'''
-        [Jump to Message]({after.jump_url})
-        in <#{after.channel.id}> by <@{after.author.id}>:
-    '''.replace(' '*8, '')
-    embed.add_field(name='before', value=before.content, inline=False)
-    embed.add_field(name='after', value=after.content, inline=False)
-
-    embed.set_author(name=get_member_name(after.author), icon_url=get_member_image(after.author))
-
+    embed = make_embed(
+        color='yellow',
+        member=after.author,
+        description=f'in <#{after.channel.id}> by <@{after.author.id}>',
+        title='Message edited',
+        url=after.jump_url
+    )
+    embed.description += f'\n\n**before**\n{before.content}'
+    embed.description += f'\n\n**after**\n{after.content}'
     channel = bot.get_channel(config.message_edits_channel)
     await channel.send(embed=embed)
 
