@@ -84,6 +84,7 @@ def make_embed(color, member, description=''):
         embed.set_thumbnail(url=get_member_image(member))
     elif isinstance(member, discord.Guild):
         embed.set_author(name=member.name, icon_url=member.icon.url)
+        embed.set_thumbnail(url=member.icon.url)
 
     return embed
 
@@ -97,43 +98,23 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
     if nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason):
         server = interaction.guild
 
-        userDM = discord.Embed(
-            color=discord.Color.yellow(),
-            timestamp=datetime.datetime.now(),
-            description=f'''
-                ## You are receiving a warning from the {server.name} Discord:
-                ### {reason}
-            '''.replace(' '*16, '').strip()
-        )
-        userDM.set_author(name=server.name, icon_url=server.icon.url)
+        userDM = make_embed('yellow', server, f'### You have been warned on the {server.name} Discord')
+        userDM.add_field(name='Warning', value=reason, inline=False)
         try:
             await user.send(embed=userDM)
             dm_sent = True
         except:
             dm_sent = False
 
-        warnEmbed = discord.Embed(
-            color=discord.Color.yellow(),
-            timestamp=datetime.datetime.now(),
-            description=f'<@{user.id}> warned with reason:\n{reason}'
-        )
+        response = make_embed('yellow', user, f'{user.mention} warned')
+        response.add_field(name='reason', value=reason, inline=False)
         if not dm_sent:
-            warnEmbed.description += '\n\n_Could not DM user_'
-
-        warnEmbed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
-        await interaction.followup.send(embed=warnEmbed)
+            response.description += '\n\n_Could not DM user_'
+        await interaction.followup.send(embed=response)
 
         # log
-        log_embed = discord.Embed(
-            color=discord.Color.red(),
-            timestamp=datetime.datetime.now(),
-            description=f'''
-                <@{user.id}> has been warned by <@{interaction.user.id}>
-                ---
-                {reason}
-            '''.replace(' '*12, '').strip()
-        )
-        log_embed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
+        log_embed = make_embed('red', user, f'<@{user.id}> has been warned by <@{interaction.user.id}>')
+        log_embed.add_field(name='reason', value=reason, inline=False)
         log_channel = bot.get_channel(config.mod_logs_channel)
         await log_channel.send(embed=log_embed)
     else:
@@ -181,7 +162,7 @@ async def flag(interaction: discord.Interaction, user: discord.User):
 async def mute(interaction: discord.Interaction, user: discord.User, time: str, reason: str):
     await interaction.response.defer()
 
-    server = [g for g in bot.guilds if g.id == config.server][0]
+    server = interaction.guild
     member = server.get_member(user.id)
     if not member:
         await interaction.followup.send(f'User no longer on the server?')
@@ -209,45 +190,28 @@ async def mute(interaction: discord.Interaction, user: discord.User, time: str, 
 
     user_time = ''
     if days > 0:
-        user_time = f'{days} days '
+        user_time = f'{days} day{"s" if days > 1 else ""} '
     if remain_hours > 0:
-        user_time += f'{hours} hours'
+        user_time += f'{hours} hour{"s" if hours > 1 else ""}'
 
-    userDM = discord.Embed(
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.now(),
-        description=f'''
-            ### You have been muted on {server.name} for {user_time}:
-            ### {reason}
-        '''.replace(' '*12, '').strip()
-    )
-    userDM.set_thumbnail(url=server.icon.url)
+    userDM = make_embed('red', server, f'### You have been muted on the {server.name} Discord')
+    userDM.add_field(name='Duration', value=user_time, inline=False)
+    userDM.add_field(name='Reason', value=reason, inline=False)
+    dm_sent = False
     try:
         await user.send(embed=userDM)
         dm_sent = True
-    except:
-        dm_sent = False
+    except: pass
 
-    response = discord.Embed(
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.now(),
-        description=f'Timed out <@{user.id}> for {time} for:\n{reason}'
-    )
+    response = make_embed('red', user, f'Timed out <@{user.id}> for {time}')
+    response.add_field(name='reason', value=reason, inline=False)
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
     await interaction.followup.send(embed=response)
 
     # log
-    log_embed = discord.Embed(
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.now(),
-        description=f'''
-            <@{user.id}> has been timed out for {time} by <@{interaction.user.id}>
-            ---
-            {reason}
-        '''.replace(' '*12, '').strip()
-    )
-    log_embed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
+    log_embed = make_embed('red', user, f'<@{user.id}> has been timed out for {time} by <@{interaction.user.id}>')
+    log_embed.add_field(name='reason', value=reason, inline=False)
     log_channel = bot.get_channel(config.mod_logs_channel)
     await log_channel.send(embed=log_embed)
 
@@ -261,43 +225,28 @@ async def mute(interaction: discord.Interaction, user: discord.User, time: str, 
 async def ban(interaction: discord.Interaction, user: discord.User, reason: str, delete_message_days: int=0):
     await interaction.response.defer()
 
-    server = [g for g in bot.guilds if g.id == config.server][0]
+    server = interaction.guild
 
-    userDM = discord.Embed(
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.now(),
-        description=f'''
-            ### You have been banned from the {server.name} Discord:
-            ### {reason}
-        '''.replace(' '*12, '').strip()
-    )
-    userDM.set_thumbnail(url=server.icon.url)
+    userDM = make_embed('red', server, f'### You have been banned from the {server.name} Discord')
+    userDM.add_field(name='Reason', value=reason)
     dm_sent = False
     try:
         await user.send(embed=userDM)
         dm_sent = True
-    except:
-        pass
+    except: pass
 
     await asyncio.sleep(0.5)
     await interaction.guild.ban(user, reason=reason, delete_message_seconds=delete_message_days*86400)
 
-    response = make_embed('red', user, f'Banned <@{user.id}> for `{reason}`')
+    response = make_embed('red', user, f'Banned <@{user.id}>')
+    response.add_field(name='reason', value=reason, inline=False)
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
     await interaction.followup.send(embed=response)
 
     # log
-    log_embed = discord.Embed(
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.now(),
-        description=f'''
-            <@{user.id}> has been banned by <@{interaction.user.id}>
-            ---
-            {reason}
-        '''.replace(' '*12, '').strip()
-    )
-    log_embed.set_author(name=get_member_name(user), icon_url=get_member_image(user))
+    log_embed = make_embed('red', user, f'<@{user.id}> has been banned by <@{interaction.user.id}>')
+    log_embed.add_field(name='reason', value=reason, inline=False)
     log_channel = bot.get_channel(config.mod_logs_channel)
     await log_channel.send(embed=log_embed)
 
@@ -307,33 +256,13 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
 @bot.event
 async def on_raw_member_remove(event):
     member = event.user
-    embed = discord.Embed(
-        color=discord.Color.red(),
-        timestamp=datetime.datetime.now(),
-        description=f'<@{member.id}> left.'
-    )
-    embed.set_author(name=get_member_name(member), icon_url=get_member_image(member))
-    embed.set_thumbnail(url=get_member_image(member))
-
+    embed = make_embed('red', member, f'<@{member.id}> left.')
     channel = bot.get_channel(config.user_logs_channel)
     await channel.send(embed=embed)
 
 @bot.event
 async def on_member_join(member):
     created = round(int(member.created_at.timestamp()))
-    # embed = discord.Embed(
-    #     color=discord.Color.green(),
-    #     timestamp=datetime.datetime.now(),
-    #     description=f'''
-    #         <@{member.id}> joined.
-
-    #         Account created <t:{created}:f>
-    #         (Roughly <t:{created}:R>)
-    #     '''.replace(' '*12, '').strip()
-    # )
-    # embed.set_author(name=get_member_name(member), icon_url=get_member_image(member))
-    # embed.set_thumbnail(url=member.avatar.url)
-
     description = f'''
         <@{member.id}> joined.
 
@@ -351,13 +280,10 @@ async def on_message_delete(message):
         return
 
     created = round(int(message.created_at.timestamp()))
-    embed = make_embed('red', message.author, 'Message deleted')
-    embed.description += f'''
-        in <#{message.channel.id}> by <@{message.author.id}>:
-
-        {message.content if message.content else ''}
-
-        _originally posted <t:{created}:f>_'''.replace(' '*8, '')
+    embed = make_embed('red', message.author, '### Message deleted')
+    embed.description += f'\nin <#{message.channel.id}> by <@{message.author.id}>'
+    embed.add_field(name='deleted message', value=message.content, inline=False)
+    embed.add_field(name=f'originally posted', value=f'<t:{created}:f>', inline=False)
 
     files = []
     for file in message.attachments:
@@ -381,11 +307,9 @@ async def on_message_edit(before, after):
     embed.description += f'''
         [Jump to Message]({after.jump_url})
         in <#{after.channel.id}> by <@{after.author.id}>:
-
-        _before:_
-        {before.content}
-        _after:_
-        {after.content}'''.replace(' '*8, '')
+    '''.replace(' '*8, '')
+    embed.add_field(name='before', value=before.content, inline=False)
+    embed.add_field(name='after', value=after.content, inline=False)
 
     embed.set_author(name=get_member_name(after.author), icon_url=get_member_image(after.author))
 
