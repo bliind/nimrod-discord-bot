@@ -302,6 +302,9 @@ async def on_message_delete(message):
     embed.description += f'\n\n**deleted message**\n{message.content}'
     embed.description += f'\n\n**originally posted**\n<t:{created}:f>'
 
+    if message.reference:
+        embed.description += f'\n\n**reply to**\nhttps://discord.com/channels/{config.server}/{message.channel.id}/{message.reference.message_id}'
+
     files = []
     for file in message.attachments:
         files.append(await file.to_file(spoiler=file.is_spoiler()))
