@@ -36,11 +36,15 @@ class MyClient(discord.Client):
         if not self.synced:
             await tree.sync(guild=discord.Object(id=config.server))
             self.synced = True
+            run_queue.start()
 
         print(f"{config.env.upper()} Nimrod is ready for duty")
 
 bot = MyClient()
 tree = app_commands.CommandTree(bot)
+
+queue = {"Member": [], "New Account": []}
+queue_timer = 0
 
 def get_member_image(member):
     try:
@@ -355,21 +359,30 @@ async def on_member_update(before, after):
     b_roles = [r.name for r in before.roles]
     a_roles = [r.name for r in after.roles]
     added = [r for r in a_roles if r not in b_roles]
-    if added:
-        role_embed.description += '\nRoles added:'
-        for role_name in added:
-            role_embed.description += f'\n✅ {role_name}'
-
     removed = [r for r in b_roles if r not in a_roles]
+
+    global queue
+    global queue_timer
+    if added:
+        if len(added) == 1 and added[0] == 'Member':
+            queue['Member'].append(after)
+            queue_timer = 10
+        else:
+            role_embed.description += '\nRoles added:'
+            for role_name in added:
+                role_embed.description += f'\n✅ {role_name}'
+
     if removed:
-        role_embed.description += '\nRoles removed:'
-        for role_name in removed:
-            role_embed.description += f'\n⛔ {role_name}'
+        if len(removed) == 1 and removed[0] == 'New Account':
+            queue['New Account'].append(after)
+            queue_timer = 10
+        else:
+            role_embed.description += '\nRoles removed:'
+            for role_name in removed:
+                role_embed.description += f'\n⛔ {role_name}'
 
     if role_embed.description != title:
         log_chan = bot.get_channel(config.role_updates_channel)
-        role_embed.set_author(name=get_member_name(after), icon_url=get_member_image(after))
-        role_embed.set_thumbnail(url=get_member_image(after))
         await log_chan.send(embed=role_embed)
 
 @bot.event
@@ -504,5 +517,36 @@ async def on_voice_state_update(member, before, after):
 
     chan = bot.get_channel(config.voice_logs_channel)
     await chan.send(embed=embed)
+
+### TASKS
+@tasks.loop(seconds=10)
+async def run_queue():
+    global queue
+    global queue_timer
+    if queue_timer > 0:
+        queue_timer = 0
+        return
+    if len(queue) == 0:
+        return
+
+    server = [g for g in bot.guilds if g.id == config.server][0]
+
+    title = '### Member Role Added\n'
+    embed = make_embed('blue', server, title)
+    for member in queue['Member']:
+        embed.description += f'\n✅ {get_member_name(member)} {member.mention}'
+    queue['Member'] = []
+    if embed.description != title:
+        log_chan = bot.get_channel(config.role_updates_channel)
+        await log_chan.send(embed=embed)
+
+    title = '### New Account Role Removed\n'
+    embed = make_embed('blurple', server, title)
+    for member in queue['New Account']:
+        embed.description += f'\n⛔ {get_member_name(member)} {member.mention}'
+    queue['New Account'] = []
+    if embed.description != title:
+        log_chan = bot.get_channel(config.role_updates_channel)
+        await log_chan.send(embed=embed)
 
 bot.run(config.token)
