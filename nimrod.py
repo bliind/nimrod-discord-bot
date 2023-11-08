@@ -61,13 +61,14 @@ def get_member_image(member):
         return None
 
 def get_member_name(member):
-    try:
-        if member.nick:
-            return member.nick
+    try: 
+        if member.nick: return member.nick
     except: pass
     try:
-        if member.display_name:
-            return member.display_name
+        if member.display_name: return member.display_name
+    except: pass
+    try:
+        if member.global_name: return member.global_name
     except: pass
 
     return member.name
@@ -296,6 +297,8 @@ async def on_member_join(member):
 async def on_message_delete(message):
     if message.channel.id in config.no_log_channels:
         return
+    if message.author.bot:
+        return
 
     created = round(int(message.created_at.timestamp()))
     embed = make_embed('red', message.author, f'in <#{message.channel.id}> by <@{message.author.id}>', title='Message deleted')
@@ -318,6 +321,8 @@ async def on_message_delete(message):
 @bot.event
 async def on_message_edit(before, after):
     if after.channel.id in config.no_log_channels:
+        return
+    if after.author.bot:
         return
 
     if before.content.strip() == after.content.strip():
