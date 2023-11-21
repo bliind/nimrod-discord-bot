@@ -88,6 +88,7 @@ def make_embed(color, member, description='', **kwargs):
     if isinstance(member, discord.Member) or isinstance(member, discord.User):
         embed.set_author(name=get_member_name(member), icon_url=get_member_image(member))
         embed.set_thumbnail(url=get_member_image(member))
+        embed.set_footer(text=f'User ID: {member.id}')
     elif isinstance(member, discord.Guild):
         embed.set_author(name=member.name, icon_url=member.icon.url)
         embed.set_thumbnail(url=member.icon.url)
