@@ -131,7 +131,7 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
 async def warnings(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer()
     warnings = nimroddb.list_warns(user.id)
-    flag = nimroddb.get_flag(user.id)
+    # flag = nimroddb.get_flag(user.id)
     count = len(warnings)
     description = f'Warnings for {user.mention} ({count}):\n'
     for w in warnings:
@@ -140,9 +140,9 @@ async def warnings(interaction: discord.Interaction, user: discord.User):
             **ID: {w.id} | Moderator: <@{w.moderator_id}>**
             {w.reason} - <t:{w.datestamp}:f>
         '''.replace(' '*12, '')
-    if flag:
-        flag = dotdict(flag)
-        description += f'\n\n_Flagged by <@{flag.moderator_id}> on <t:{flag.datestamp}:f>_'
+    # if flag:
+    #     flag = dotdict(flag)
+    #     description += f'\n\n_Flagged by <@{flag.moderator_id}> on <t:{flag.datestamp}:f>_'
 
     warnings_embed = make_embed('yellow', user, description)
     await interaction.followup.send(embed=warnings_embed)
@@ -156,14 +156,25 @@ async def delwarn(interaction: discord.Interaction, warn_id: str):
         await interaction.followup.send("Something went wrong")
 
 @tree.command(name='flag', description='Flag a user as suspicious', guild=discord.Object(id=config.server))
-async def flag(interaction: discord.Interaction, user: discord.User):
+async def flag(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer()
     now = datetime.datetime.now()
-    if nimroddb.add_flag(config.server, user.id, interaction.user.id, int(round(now.timestamp()))):
-        embed = make_embed('yellow', user, f'{user.mention} flagged')
-        await interaction.followup.send(embed=embed)
+    reason = f'(FLAG) {reason}'
+    if nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason):
+        embed = make_embed('yellow', user, f'{user.mention} flagged for: {reason}')
+        await interaction.edit_original_response(embed=embed)
     else:
-        await interaction.followup.send("I had a database error, I'm so sorry, please try again")
+        await interaction.edit_original_response(content='I had a database error, I\'m so sorry, please try again')
+
+# @tree.command(name='flag', description='Flag a user as suspicious', guild=discord.Object(id=config.server))
+# async def flag(interaction: discord.Interaction, user: discord.User):
+#     await interaction.response.defer()
+#     now = datetime.datetime.now()
+#     if nimroddb.add_flag(config.server, user.id, interaction.user.id, int(round(now.timestamp()))):
+#         embed = make_embed('yellow', user, f'{user.mention} flagged')
+#         await interaction.followup.send(embed=embed)
+#     else:
+#         await interaction.followup.send("I had a database error, I'm so sorry, please try again")
 
 @tree.command(name='mute', description='Timeout a user', guild=discord.Object(id=config.server))
 async def mute(interaction: discord.Interaction, user: discord.User, time: str, reason: str):
@@ -444,23 +455,27 @@ async def on_guild_channel_update(before, after):
             befores[role.name][bo[0]] = bo[1]
 
     final = {}
-    description = f'Permissions updated for <#{after.id}>:'
+    description = f'### Channel <#{after.id}> updated:'
     embed = make_embed('blurple', after.guild, description)
     for role, perms in overwrites.items():
-        final[role] = {}
         for perm, access in perms.items():
             try: old = befores[role][perm]
             except: old = None
             if old != access:
+                final[role] = {}
                 final[role][perm] = access
 
+    if len(final.items()):
+        embed.description += '\n\n### Permissions Updated:'
     for r, ps in final.items():
-        if len(ps) > 0:
-            embed.description += f'\n\n:arrow_right: **{r}**'
+        embed.description += f'\n\n:arrow_right: **{r}**'
         for p, a in ps.items():
             emojis = {True: ':white_check_mark:', False: ':no_entry:', None: ':white_large_square:'}
             pr = p.replace('_', ' ').capitalize()
             embed.description += f'\n{emojis[a]} {pr}'
+
+    if before.slowmode_delay != after.slowmode_delay:
+        embed.description += f'\n\n### Slowmode updated:\n{before.slowmode_delay} seconds -> {after.slowmode_delay} seconds'
 
     if embed.description.strip() != description:
         chan = bot.get_channel(config.server_logs_channel)
