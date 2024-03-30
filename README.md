@@ -21,4 +21,10 @@ CREATE TABLE flags(
     moderator_id INT,
     datestamp INT
 );
+
+CREATE TABLE warn_message(
+    warn_id TEXT,
+    channel_id INT,
+    message_id INT
+);
 ```

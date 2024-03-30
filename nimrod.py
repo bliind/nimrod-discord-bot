@@ -102,7 +102,8 @@ def make_embed(color, member, description='', **kwargs):
 async def warn(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer()
     now = datetime.datetime.now()
-    if nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason):
+    warn_id = await nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason)
+    if warn_id != False:
         server = interaction.guild
 
         userDM = make_embed('yellow', server, f'### You have been warned on the {server.name} Discord')
@@ -117,7 +118,9 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
         response.add_field(name='reason', value=reason, inline=False)
         if not dm_sent:
             response.description += '\n\n_Could not DM user_'
-        await interaction.followup.send(embed=response)
+        outgoing = await interaction.followup.send(embed=response)
+
+        await nimroddb.add_warn_message_id(warn_id, outgoing.channel.id, outgoing.id)
 
         # log
         log_embed = make_embed('red', user, f'<@{user.id}> has been warned by <@{interaction.user.id}>')
@@ -130,19 +133,17 @@ async def warn(interaction: discord.Interaction, user: discord.User, reason: str
 @tree.command(name='warnings', description='Look up the warnings for a user', guild=discord.Object(id=config.server))
 async def warnings(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer()
-    warnings = nimroddb.list_warns(user.id)
-    # flag = nimroddb.get_flag(user.id)
+    warnings = await nimroddb.list_warns(user.id)
     count = len(warnings)
     description = f'Warnings for {user.mention} ({count}):\n'
     for w in warnings:
         w = dotdict(w)
-        description += f'''
-            **ID: {w.id} | Moderator: <@{w.moderator_id}>**
-            {w.reason} - <t:{w.datestamp}:f>
-        '''.replace(' '*12, '')
-    # if flag:
-    #     flag = dotdict(flag)
-    #     description += f'\n\n_Flagged by <@{flag.moderator_id}> on <t:{flag.datestamp}:f>_'
+        if w.message_id:
+            link = f'https://discord.com/channels/{config.server}/{w.channel_id}/{w.message_id}'
+            description += f'\n**ID: [{w.id}]({link}) | Moderator: <@{w.moderator_id}>**'
+        else:
+            description += f'\n**ID: {w.id} | Moderator: <@{w.moderator_id}>**'
+        description += f'\n{w.reason} - <t:{w.datestamp}:f>\n'
 
     warnings_embed = make_embed('yellow', user, description)
     await interaction.followup.send(embed=warnings_embed)
@@ -150,7 +151,7 @@ async def warnings(interaction: discord.Interaction, user: discord.User):
 @tree.command(name='delwarn', description='Delete a warning for a user', guild=discord.Object(id=config.server))
 async def delwarn(interaction: discord.Interaction, warn_id: str):
     await interaction.response.defer()
-    if nimroddb.del_warn(warn_id):
+    if await nimroddb.del_warn(warn_id):
         await interaction.followup.send(embed=discord.Embed(timestamp=datetime.datetime.now(), description=f'{warn_id} deleted'))
     else:
         await interaction.followup.send("Something went wrong")
@@ -160,21 +161,13 @@ async def flag(interaction: discord.Interaction, user: discord.User, reason: str
     await interaction.response.defer()
     now = datetime.datetime.now()
     reason = f'(FLAG) {reason}'
-    if nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason):
+    warn_id = await nimroddb.add_warn(interaction.guild.id, user.id, interaction.user.id, int(round(now.timestamp())), reason)
+    if warn_id != False:
         embed = make_embed('yellow', user, f'{user.mention} flagged for: {reason}')
-        await interaction.edit_original_response(embed=embed)
+        outgoing = await interaction.followup.send(embed=embed)
+        await nimroddb.add_warn_message_id(warn_id, outgoing.channel.id, outgoing.id)
     else:
-        await interaction.edit_original_response(content='I had a database error, I\'m so sorry, please try again')
-
-# @tree.command(name='flag', description='Flag a user as suspicious', guild=discord.Object(id=config.server))
-# async def flag(interaction: discord.Interaction, user: discord.User):
-#     await interaction.response.defer()
-#     now = datetime.datetime.now()
-#     if nimroddb.add_flag(config.server, user.id, interaction.user.id, int(round(now.timestamp()))):
-#         embed = make_embed('yellow', user, f'{user.mention} flagged')
-#         await interaction.followup.send(embed=embed)
-#     else:
-#         await interaction.followup.send("I had a database error, I'm so sorry, please try again")
+        await interaction.followup.send(content='I had a database error, I\'m so sorry, please try again')
 
 @tree.command(name='mute', description='Timeout a user', guild=discord.Object(id=config.server))
 async def mute(interaction: discord.Interaction, user: discord.User, time: str, reason: str):
@@ -225,7 +218,7 @@ async def mute(interaction: discord.Interaction, user: discord.User, time: str, 
     response.add_field(name='reason', value=reason, inline=False)
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
-    await interaction.followup.send(embed=response)
+    outgoing = await interaction.followup.send(embed=response)
 
     # log
     log_embed = make_embed('red', user, f'<@{user.id}> has been timed out for {time} by <@{interaction.user.id}>')
@@ -235,7 +228,8 @@ async def mute(interaction: discord.Interaction, user: discord.User, time: str, 
 
     now = datetime.datetime.now()
     try:
-        nimroddb.add_warn(config.server, user.id, interaction.user.id, int(round(now.timestamp())), f'(MUTE) {reason}')
+        warn_id = await nimroddb.add_warn(config.server, user.id, interaction.user.id, int(round(now.timestamp())), f'(MUTE) {reason}')
+        await nimroddb.add_warn_message_id(warn_id, outgoing.channel.id, outgoing.id)
     except:
         await interaction.channel.send('Error logging mute to warns')
 
@@ -260,7 +254,7 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
     response.add_field(name='reason', value=reason, inline=False)
     if not dm_sent:
         response.description += '\n\n_Could not DM user_'
-    await interaction.followup.send(embed=response)
+    outgoing = await interaction.followup.send(embed=response)
 
     # log
     log_embed = make_embed('red', user, f'<@{user.id}> has been banned by <@{interaction.user.id}>')
@@ -270,7 +264,8 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
 
     now = datetime.datetime.now()
     try:
-        nimroddb.add_warn(config.server, user.id, interaction.user.id, int(round(now.timestamp())), f'(BAN) {reason}')
+        warn_id = await nimroddb.add_warn(config.server, user.id, interaction.user.id, int(round(now.timestamp())), f'(BAN) {reason}')
+        await nimroddb.add_warn_message_id(warn_id, outgoing.channel.id, outgoing.id)
     except:
         await interaction.channel.send('Error logging ban to warns')
 

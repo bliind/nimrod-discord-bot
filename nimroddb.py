@@ -1,86 +1,50 @@
-import sqlite3
+import aiosqlite
 import uuid
 
-def open_db():
-    return sqlite3.connect('nimrod.db')
-
-def add_warn(server_id: int, user_id: int, moderator_id: int, datestamp: str, reason: str):
+async def add_warn(server_id: int, user_id: int, moderator_id: int, datestamp: str, reason: str):
     try:
-        conn = open_db()
-        cur = conn.cursor()
-        cur.execute('INSERT INTO warnings (id, server_id, user_id, moderator_id, datestamp, reason) VALUES (?, ?, ?, ?, ?, ?)', (str(uuid.uuid4()), server_id, user_id, moderator_id, datestamp, reason))
-        conn.commit()
-        conn.close()
-        return True
+        async with aiosqlite.connect('nimrod.db') as db:
+            the_uuid = str(uuid.uuid4())
+            await db.execute('INSERT INTO warnings (id, server_id, user_id, moderator_id, datestamp, reason) VALUES (?, ?, ?, ?, ?, ?)', (the_uuid, server_id, user_id, moderator_id, datestamp, reason))
+            await db.commit()
+            return the_uuid
     except Exception as e:
         print('Failed to add warn:')
-        print(e)
+        print(e, user_id, datestamp)
         return False
 
-def del_warn(warn_id: str):
+async def del_warn(warn_id: str):
     try:
-        conn = open_db()
-        cur = conn.cursor()
-        cur.execute('DELETE FROM warnings WHERE id = ?', (warn_id,))
-        count = cur.rowcount
-        conn.commit()
-        conn.close()
-        if count > 0:
-            return True
-        return False
-    except Exception as e:
-        print('Failed to delete warn:')
-        print(e)
-        return False
-
-def add_flag(server_id: int, user_id: int, moderator_id: int, datestamp: str):
-    try:
-        conn = open_db()
-        cur = conn.cursor()
-        cur.execute('INSERT INTO flags (id, server_id, user_id, moderator_id, datestamp) VALUES (?, ?, ?, ?, ?)', (str(uuid.uuid4()), server_id, user_id, moderator_id, datestamp))
-        conn.commit()
-        conn.close()
+        async with aiosqlite.connect('nimrod.db') as db:
+            await db.execute('DELETE FROM warnings WHERE id = ?', (warn_id,))
+            await db.commit()
         return True
     except Exception as e:
-        print('Failed to add flag:')
-        print(e)
+        print('Failed to delete warning:')
+        print(e, warn_id)
         return False
 
-def get_flag(user_id: int):
-    conn = open_db()
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM flags WHERE user_id = ?', (user_id,))
-    row = cur.fetchone()
-    conn.close()
-
+async def list_warns(user_id: int):
     try:
-        return {
-            "id":           row[0],
-            "server_id":    row[1],
-            "user_id":      row[2],
-            "moderator_id": row[3],
-            "datestamp":    row[4]
-        }
-    except:
-        return None
+        out = []
+        async with aiosqlite.connect('nimrod.db') as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute('SELECT * FROM warnings LEFT JOIN warn_message ON warnings.id = warn_message.warn_id WHERE user_id = ?', (user_id,)) as cursor:
+                async for row in cursor:
+                    out.append(row)
+        return out
+    except Exception as e:
+        print('Failed to list warns:')
+        print(e, user_id)
+        return False
 
-def list_warns(user_id: int):
-    conn = open_db()
-    cur = conn.cursor()
-    cur.execute('SELECT * FROM warnings WHERE user_id = ?', (user_id,))
-    results = cur.fetchall()
-    conn.close()
-
-    out = []
-    if results:
-        for result in results:
-            out.append({
-                "id":           result[0],
-                "server_id":    result[1],
-                "user_id":      result[2],
-                "moderator_id": result[3],
-                "datestamp":    result[4],
-                "reason":       result[5]
-            })
-
-    return out
+async def add_warn_message_id(warn_id, channel_id, message_id):
+    try:
+        async with aiosqlite.connect('nimrod.db') as db:
+            await db.execute('INSERT INTO warn_message (warn_id, channel_id, message_id) VALUES (?, ?, ?)', (warn_id, channel_id, message_id))
+            await db.commit()
+        return True
+    except Exception as e:
+        print('Failed to add warn message id:')
+        print(e, warn_id, channel_id, message_id)
+        return False
