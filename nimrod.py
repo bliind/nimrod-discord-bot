@@ -3,6 +3,8 @@ import asyncio
 import json
 import os
 import re
+import io
+import aiohttp
 import datetime
 import nimroddb
 from discord import app_commands
@@ -309,7 +311,15 @@ async def on_message_delete(message):
 
     created = round(int(message.created_at.timestamp()))
     embed = make_embed('red', message.author, f'in <#{message.channel.id}> by <@{message.author.id}>', title='Message deleted')
-    embed.description += f'\n\n**deleted message**\n{message.content}'
+
+    content = message.content
+    if message.poll:
+        content += '\n**Poll**:'
+        content += f'\n_Question_: {message.poll["question"]["text"]}'
+        for answer in message.poll['answers']:
+            content += f'\n_Answer_: {answer["poll_media"]["text"]}'
+
+    embed.description += f'\n\n**deleted message**\n{content}'
     embed.description += f'\n\n**originally posted**\n<t:{created}:f>'
 
     if message.reference:
@@ -321,6 +331,15 @@ async def on_message_delete(message):
 
     if files:
         embed.description += '\n_(Above images were attached)_'
+
+    if message.stickers:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(message.stickers[0].url) as resp:
+                if resp.status != 200:
+                    print('Failed to download sticker image')
+                data = io.BytesIO(await resp.read())
+                files.append(discord.File(data, f'{message.stickers[0].name}.png'))
+        embed.description += '\n_(Above sticker was attached)_'
 
     channel = bot.get_channel(config.message_deletes_channel)
     await channel.send(embed=embed, files=files)
