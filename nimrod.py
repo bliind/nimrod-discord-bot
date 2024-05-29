@@ -314,7 +314,7 @@ async def on_message_delete(message):
 
     content = message.content
     if message.poll:
-        content += '\n**Poll**:'
+        content += '\n**poll**'
         content += f'\n_Question_: {message.poll["question"]["text"]}'
         for answer in message.poll['answers']:
             content += f'\n_Answer_: {answer["poll_media"]["text"]}'
@@ -327,7 +327,10 @@ async def on_message_delete(message):
 
     files = []
     for file in message.attachments:
-        files.append(await file.to_file(spoiler=file.is_spoiler()))
+        try:
+            files.append(await file.to_file(spoiler=file.is_spoiler()))
+        except:
+            embed.description += '\n_(There were (more?) images attached but discord is stupid)_'
 
     if files:
         embed.description += '\n_(Above images were attached)_'
