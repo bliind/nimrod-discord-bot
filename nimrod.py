@@ -306,11 +306,9 @@ async def on_member_join(member):
 async def on_message_delete(message):
     if message.channel.id in config.no_log_channels:
         return
-
     if message.channel.type == discord.ChannelType.public_thread:
         if message.channel.parent.id in config.no_log_channels:
             return
-
     if message.author.bot:
         return
 
@@ -356,6 +354,9 @@ async def on_message_delete(message):
 async def on_message_edit(before, after):
     if after.channel.id in config.no_log_channels:
         return
+    if after.channel.type == discord.ChannelType.public_thread:
+        if after.channel.parent.id in config.no_log_channels:
+            return
     if after.author.bot:
         return
 
