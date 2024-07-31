@@ -100,6 +100,11 @@ def make_embed(color, member, description='', **kwargs):
 ######
 ### Commands
 ######
+@tree.command(name='reload_config', description='Reload the bot config', guild=discord.Object(id=config.server))
+async def reload_config_command(interaction):
+    load_config()
+    await interaction.response.send_message('Reloaded', ephemeral=True)
+
 @tree.command(name='warn', description='Warn a user', guild=discord.Object(id=config.server))
 async def warn(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer()
