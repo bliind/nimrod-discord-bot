@@ -276,6 +276,32 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
     except:
         await interaction.channel.send('Error logging ban to warns')
 
+@tree.command(name='forum_ban', description='Restrict a member from posting to the forums', guild=discord.Object(id=config.server))
+async def forum_ban(interaction: discord.Interaction, user: discord.User, reason: str):
+    await interaction.response.defer()
+
+    for forum in config.forum_ban_channels:
+        forum_chan = bot.get_channel(forum)
+        overwrites = forum_chan.overwrites
+        overwrites[user] = discord.PermissionOverwrite(view_channel=False, add_reactions=False, send_messages=False, send_messages_in_threads=False)
+        await forum_chan.edit(overwrites=overwrites)
+
+    response = make_embed('orange', user, f'<@{user.id}> has been forum banned')
+    response.add_field(name='reason', value=reason, inline=False)
+    await interaction.followup.send(embed=response)
+
+    # log
+    log_embed = make_embed('red', user, f'<@{user.id}> has been forum banned by <@{interaction.user.id}>')
+    log_embed.add_field(name='reason', value=reason, inline=False)
+    log_channel = bot.get_channel(config.mod_logs_channel)
+    await log_channel.send(embed=log_embed)
+
+    try:
+        now = datetime.datetime.now()
+        await nimroddb.add_warn(config.server, user.id, interaction.user.id, int(round(now.timestamp())), f'(FORUM BAN) {reason}')
+    except:
+        await interaction.channel.send('Error logging ban to warns')
+
 @tree.command(name='appeal', description='Log a Ban Appeal', guild=discord.Object(id=config.server))
 async def appeal_command(interaction: discord.Interaction, user: str, decision: str, notes: str=''):
     embed = make_embed('blue', interaction.user, f'### Ban appeal for __{user}__')
@@ -308,7 +334,7 @@ async def on_member_join(member):
     await channel.send(embed=embed)
 
 @bot.event
-async def on_message_delete(message):
+async def on_message_delete(message, thread=False):
     if message.channel.id in config.no_log_channels:
         return
     if message.channel.type == discord.ChannelType.public_thread:
@@ -318,7 +344,13 @@ async def on_message_delete(message):
         return
 
     created = round(int(message.created_at.timestamp()))
-    embed = make_embed('red', message.author, f'in <#{message.channel.id}> by <@{message.author.id}>', title='Message deleted')
+    title = 'Message deleted'
+    description = f'in <#{message.channel.id}> by <@{message.author.id}>'
+    if thread == True:
+        title = 'Thread deleted'
+        description = f'"{message.channel.name}" in <#{message.channel.parent.id}> by <@{message.author.id}>'
+
+    embed = make_embed('red', message.author, description, title=title)
 
     content = message.content
     if message.poll:
@@ -334,11 +366,17 @@ async def on_message_delete(message):
         embed.description += f'\n\n**reply to**\nhttps://discord.com/channels/{config.server}/{message.channel.id}/{message.reference.message_id}'
 
     files = []
-    for file in message.attachments:
-        try:
-            files.append(await file.to_file(spoiler=file.is_spoiler()))
-        except:
-            embed.description += '\n_(There were (more?) images attached but discord is stupid)_'
+    try:
+        for file in message.attachments:
+            # files.append(await file.to_file(spoiler=file.is_spoiler()))
+            async with aiohttp.ClientSession() as session:
+                async with session.get(file.url) as resp:
+                    if resp.status != 200:
+                        print('Failed to download message attachment')
+                    data = io.BytesIO(await resp.read())
+                    files.append(discord.File(data, f'{file.filename}'))
+    except:
+        embed.description += '\n_(There were (more?) images attached but discord is stupid)_'
 
     if files:
         embed.description += '\n_(Above images were attached)_'
@@ -354,6 +392,13 @@ async def on_message_delete(message):
 
     channel = bot.get_channel(config.message_deletes_channel)
     await channel.send(embed=embed, files=files)
+
+@bot.event
+async def on_thread_delete(thread):
+    try: await on_message_delete(thread.starter_message, True)
+    except Exception as e:
+        print('Failed to log thread deletion')
+        print(e)
 
 @bot.event
 async def on_message_edit(before, after):
