@@ -334,7 +334,7 @@ async def on_member_join(member):
     await channel.send(embed=embed)
 
 @bot.event
-async def on_message_delete(message, thread=False):
+async def on_message_delete(message, thread=False, bulk=False):
     if message.channel.id in config.no_log_channels:
         return
     if message.channel.type == discord.ChannelType.public_thread:
@@ -345,6 +345,9 @@ async def on_message_delete(message, thread=False):
 
     created = round(int(message.created_at.timestamp()))
     title = 'Message deleted'
+    if bulk == True:
+        title = 'Messages bulk deleted'
+
     description = f'in <#{message.channel.id}> by <@{message.author.id}>'
     if thread == True:
         title = 'Thread deleted'
@@ -395,10 +398,15 @@ async def on_message_delete(message, thread=False):
 
 @bot.event
 async def on_thread_delete(thread):
-    try: await on_message_delete(thread.starter_message, True)
+    try: await on_message_delete(thread.starter_message, thread=True)
     except Exception as e:
         print('Failed to log thread deletion')
         print(e)
+
+@bot.event
+async def on_bulk_message_delete(messages):
+    for message in messages:
+        await on_message_delete(message, bulk=True)
 
 @bot.event
 async def on_message_edit(before, after):
