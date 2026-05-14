@@ -7,6 +7,7 @@ import io
 import aiohttp
 import datetime
 import nimroddb
+from collections import defaultdict
 from discord import app_commands
 from discord.ext import tasks
 
@@ -33,7 +34,7 @@ class MyClient(discord.Client):
         intents.members = True
         super().__init__(intents=intents)
         self.synced = False
-    
+
     async def on_ready(self):
         if not self.synced:
             await tree.sync(guild=discord.Object(id=config.server))
@@ -63,7 +64,7 @@ def get_member_image(member):
         return None
 
 def get_member_name(member):
-    try: 
+    try:
         if member.nick: return member.nick
     except: pass
     try:
@@ -75,7 +76,7 @@ def get_member_name(member):
 
     return member.name
 
-def make_embed(color, member, description='', **kwargs):
+def make_embed(color, member, description='', **kwargs) -> discord.Embed:
     color = getattr(discord.Color, color)
     embed = discord.Embed(
         color=color(),
@@ -312,6 +313,120 @@ async def appeal_command(interaction: discord.Interaction, user: str, decision: 
 ######
 ### Events
 ######
+# scam spam prevention
+spam_tracker = defaultdict(list)
+currently_flagged_users = set()
+
+async def clean_expired_signatures(user_id: int):
+    await asyncio.sleep(config.spam_time_window)
+    if user_id in currently_flagged_users:
+        return
+
+    if user_id in spam_tracker:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        valid_start = now - datetime.timedelta(seconds=config.spam_time_window)
+
+        spam_tracker[user_id] = [
+            item for item in spam_tracker[user_id] if item[1] > valid_start
+        ]
+
+        if not spam_tracker[user_id]:
+            del spam_tracker[user_id]
+
+async def flag_and_mute(user_id: int, guild: discord.Guild, target_signature: str):
+    await asyncio.sleep(2)
+
+    member = guild.get_member(user_id)
+    if not member:
+        currently_flagged_users.discard(user_id)
+        spam_tracker.pop(user_id, None)
+        return
+
+    cached_msgs = spam_tracker.get(user_id, [])
+    messages_to_delete = [
+        msg for sig, _, msg in cached_msgs if sig == target_signature
+    ]
+
+    spam_tracker.pop(user_id, None)
+    currently_flagged_users.discard(user_id)
+
+    preserved_files = []
+    if messages_to_delete:
+        sample_msg = messages_to_delete[0]
+        for img in [a for a in sample_msg.attachments if a.width is not None]:
+            try:
+                img_bytes = await img.read()
+                preserved_files.append(
+                    discord.File(io.BytesIO(img_bytes), filename=img.filename)
+                )
+            except Exception as e:
+                print(f'Failed to preserve attachment byte sequence: {e}')
+
+    try:
+        await member.timeout(
+            datetime.timedelta(minutes=10),
+            reason='Automated Spam Detection'
+        )
+    except discord.Forbidden:
+        print(f'Bot cannot mute {member.name}')
+
+    channels_hit = set()
+    for msg in messages_to_delete:
+        channels_hit.add(msg.channel.mention)
+        try:
+            await msg.delete()
+        except (discord.NotFound, discord.Forbidden):
+            pass
+        except Exception as e:
+            print(f'Could not delete message: {e}')
+
+    log_channel = discord.utils.get(guild.text_channels, id=config.report_channel)
+    mod_role = discord.utils.get(guild.roles, id=config.moderator_role)
+    if log_channel:
+        channels_str = ', '.join(channels_hit)
+        title = 'Automated Spam Detection'
+        description = f'**User**\n{member.mention} ({member.id})\n\n' \
+                    f'**Channels cleaned**:\n{channels_str}\n\n' \
+                    'Attached images were spammed. User is under 10m timeout.'
+        embed = make_embed('yellow', member, description, title=title)
+        await log_channel.send(content=f'{mod_role.mention if mod_role else ""}', embed=embed, files=preserved_files)
+
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot or not message.guild:
+        return
+
+    if message.content != '':
+        return
+
+    valid_images = [a for a in message.attachments if a.width is not None]
+    if len(valid_images) != 4:
+        return
+
+    meta_elements = [f'{img.filename}_{img.size}' for img in valid_images]
+    meta_elements.sort()
+    payload_signature = '|'.join(meta_elements)
+
+    user_id = message.author.id
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if user_id in currently_flagged_users:
+        # if already flagged just log
+        spam_tracker[user_id].append((payload_signature, now, message))
+        return
+
+    recent_signatures = [item[0] for item in spam_tracker[user_id]]
+    if payload_signature in recent_signatures and len(recent_signatures) > 1:
+        # same 4 images send to at least 3 channels, flag em
+        currently_flagged_users.add(user_id)
+        spam_tracker[user_id].append((payload_signature, now, message))
+
+        asyncio.create_task(flag_and_mute(user_id, message.guild, payload_signature))
+        return
+
+    spam_tracker[user_id].append((payload_signature, now, message))
+    asyncio.create_task(clean_expired_signatures(user_id))
+
 @bot.event
 async def on_raw_member_remove(event):
     member = event.user
@@ -371,15 +486,14 @@ async def on_message_delete(message, thread=False, bulk=False):
     files = []
     try:
         for file in message.attachments:
-            # files.append(await file.to_file(spoiler=file.is_spoiler()))
             async with aiohttp.ClientSession() as session:
                 async with session.get(file.url) as resp:
                     if resp.status != 200:
-                        print('Failed to download message attachment')
+                        raise Exception
                     data = io.BytesIO(await resp.read())
                     files.append(discord.File(data, f'{file.filename}'))
-    except:
-        embed.description += '\n_(There were (more?) images attached but discord is stupid)_'
+    except Exception:
+        embed.description += f'\n_(There were {len(message.attachments)} images attached but discord is stupid)_'
 
     if files:
         embed.description += '\n_(Above images were attached)_'
@@ -440,7 +554,7 @@ async def on_member_update(before, after):
 
     if before.nick != after.nick:
         change_embed.description += f'\n🕵️‍♂️ changed nickname from **{before.nick}** to **{after.nick}**'
-    
+
     if before.timed_out_until != after.timed_out_until:
         if before.timed_out_until == None:
             try: timed_out_until = round(int(after.timed_out_until.timestamp()))
