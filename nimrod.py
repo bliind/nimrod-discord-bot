@@ -10,6 +10,7 @@ import nimroddb
 from collections import defaultdict
 from discord import app_commands
 from discord.ext import tasks
+from ReportView import ReportView
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
@@ -277,6 +278,42 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str,
     except:
         await interaction.channel.send('Error logging ban to warns')
 
+@tree.command(name='spam_ban', description='Ban a compromised account', guild=discord.Object(id=config.server))
+async def spam_ban(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer()
+
+    server = interaction.guild
+    reason = 'Your account has been compromised and is sending spam/scam messages. Once you have secured access to your account please feel free to appeal using https://appeal.gg/marvelsnap'
+    userDM = make_embed('red', server, f'### You have been banned from the {server.name} Discord')
+    userDM.add_field(name='Reason', value=reason)
+    dm_sent = False
+    try:
+        await user.send(embed=userDM)
+        dm_sent = True
+    except: pass
+
+    await asyncio.sleep(0.5)
+    await interaction.guild.ban(user, reason=reason, delete_message_seconds=86400)
+
+    response = make_embed('red', user, f'Banned <@{user.id}>')
+    response.add_field(name='reason', value=reason, inline=False)
+    if not dm_sent:
+        response.description += '\n\n_Could not DM user_'
+    outgoing = await interaction.followup.send(embed=response)
+
+    # log
+    log_embed = make_embed('red', user, f'<@{user.id}> has been banned by <@{interaction.user.id}>')
+    log_embed.add_field(name='reason', value='Compromised Account', inline=False)
+    log_channel = bot.get_channel(config.mod_logs_channel)
+    await log_channel.send(embed=log_embed)
+
+    now = datetime.datetime.now()
+    try:
+        warn_id = await nimroddb.add_warn(config.server, user.id, interaction.user.id, int(round(now.timestamp())), f'(BAN) {reason}')
+        await nimroddb.add_warn_message_id(warn_id, outgoing.channel.id, outgoing.id)
+    except:
+        await interaction.channel.send('Error logging ban to warns')
+
 @tree.command(name='forum_ban', description='Restrict a member from posting to the forums', guild=discord.Object(id=config.server))
 async def forum_ban(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer()
@@ -382,6 +419,8 @@ async def flag_and_mute(user_id: int, guild: discord.Guild, target_signature: st
 
     log_channel = discord.utils.get(guild.text_channels, id=config.report_channel)
     mod_role = discord.utils.get(guild.roles, id=config.moderator_role)
+
+    report_view = ReportView(timeout=None)
     if log_channel:
         channels_str = ', '.join(channels_hit)
         title = 'Automated Spam Detection'
@@ -389,14 +428,35 @@ async def flag_and_mute(user_id: int, guild: discord.Guild, target_signature: st
                     f'**Channels cleaned**:\n{channels_str}\n\n' \
                     'Attached images were spammed. User is under 10m timeout.'
         embed = make_embed('yellow', member, description, title=title)
-        await log_channel.send(content=f'{mod_role.mention if mod_role else ""}', embed=embed, files=preserved_files)
+
+        report_message = await log_channel.send(content=f'{mod_role.mention if mod_role else ""}', embed=embed, files=preserved_files, view=report_view)
+        await report_view.wait()
+        if report_view.value:
+            u = report_view.buttonpusher
+
+            userDM = make_embed('red', guild, f'### You have been banned from the {guild.name} Discord')
+            userDM.add_field(name='Reason', value='Your account has been compromised and is sending spam/scam messages. Once you have secured access to your account please feel free to appeal using https://appeal.gg/marvelsnap')
+            try:
+                await member.send(embed=userDM)
+            except Exception:
+                pass
+            await asyncio.sleep(0.5)
+            await guild.ban(member, reason='Compromised account', delete_message_seconds=86400)
+
+            embed.description += f'\n\n✅ Banned by {u.mention} ({u.name})'
+            embed.color = discord.Color.green()
+        elif report_view.value == False:
+            u = report_view.buttonpusher
+
+            await member.timeout(None)
+            await log_channel.send('<@145971157902950401> there was a false positive')
+            embed.description += f'\n\n❌ {u.mention} ({u.name}) marked this a false report'
+            embed.color = discord.Color.red()
+        await report_message.edit(embed=embed, view=report_view)
 
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot or not message.guild:
-        return
-
-    if message.content != '':
         return
 
     valid_images = [a for a in message.attachments if a.width is not None]
