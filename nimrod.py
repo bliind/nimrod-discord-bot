@@ -77,7 +77,7 @@ def get_member_name(member):
 
     return member.name
 
-def make_embed(color, member, description='', **kwargs) -> discord.Embed|None:
+def make_embed(color, member, description='', **kwargs):
     color = getattr(discord.Color, color)
     embed = discord.Embed(
         color=color(),
