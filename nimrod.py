@@ -77,7 +77,7 @@ def get_member_name(member):
 
     return member.name
 
-def make_embed(color, member, description='', **kwargs) -> discord.Embed:
+def make_embed(color, member, description='', **kwargs) -> discord.Embed|None:
     color = getattr(discord.Color, color)
     embed = discord.Embed(
         color=color(),
@@ -512,7 +512,7 @@ async def on_member_join(member):
 async def on_message_delete(message, thread=False, bulk=False):
     if message.channel.id in config.no_log_channels:
         return
-    if message.channel.type == discord.ChannelType.public_thread:
+    if message.channel.type in [discord.ChannelType.public_thread, discord.ChannelType.private_thread]:
         if message.channel.parent.id in config.no_log_channels:
             return
     if message.author.bot:
@@ -539,6 +539,7 @@ async def on_message_delete(message, thread=False, bulk=False):
 
     embed.description += f'\n\n**deleted message**\n{content}'
     embed.description += f'\n\n**originally posted**\n<t:{created}:f>'
+    embed.description += f'\n\n**message id**\n{message.id}'
 
     if message.reference:
         embed.description += f'\n\n**reply to**\nhttps://discord.com/channels/{config.server}/{message.channel.id}/{message.reference.message_id}'
@@ -586,7 +587,7 @@ async def on_bulk_message_delete(messages):
 async def on_message_edit(before, after):
     if after.channel.id in config.no_log_channels:
         return
-    if after.channel.type == discord.ChannelType.public_thread:
+    if after.channel.type in [discord.ChannelType.public_thread, discord.ChannelType.private_thread]:
         if after.channel.parent.id in config.no_log_channels:
             return
     if after.author.bot:
